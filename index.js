@@ -12,10 +12,16 @@ require('dotenv').config(); // Load from .env
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// === Ensure "uploads" folder exists ===
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
 // Middleware
 app.use(cors());
-app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 // === Multer Configuration for GCash Uploads ===
 const storage = multer.diskStorage({
@@ -35,13 +41,17 @@ app.post('/submit-gcash', upload.single('proof'), async (req, res) => {
   const { minecraft, discord, rank, method } = req.body;
   const file = req.file;
 
+  if (!file) {
+    return res.status(400).json({ error: "Missing proof image" });
+  }
+
   const embed = {
     title: "📸 New GCash Proof Submitted",
     color: 0x0099ff,
     fields: [
-      { name: "Minecraft", value: minecraft, inline: true },
-      { name: "Discord", value: discord, inline: true },
-      { name: "Rank", value: rank, inline: true },
+      { name: "Minecraft", value: minecraft || "N/A", inline: true },
+      { name: "Discord", value: discord || "N/A", inline: true },
+      { name: "Rank", value: rank || "N/A", inline: true },
       { name: "Payment Method", value: method || "GCash", inline: true },
       { name: "Time", value: new Date().toLocaleString(), inline: false }
     ]
@@ -59,20 +69,20 @@ app.post('/submit-gcash', upload.single('proof'), async (req, res) => {
     fs.unlinkSync(file.path);
     res.status(200).json({ success: true, message: "GCash submitted!" });
   } catch (err) {
-    console.error(err);
+    console.error("❌ GCash Discord webhook failed:", err.message);
     res.status(500).json({ error: "Failed to send webhook" });
   }
 });
 
 // === PayPal IPN Listener ===
-app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, res) => {
+app.post('/paypal-ipn', express.urlencoded({ extended: false }), async (req, res) => {
   const rawBody = new URLSearchParams(req.body).toString();
-  const ipnVerification = `cmd=_notify-validate&${rawBody}`;
+  const verificationBody = `cmd=_notify-validate&${rawBody}`;
 
   try {
     const { data } = await axios.post(
       'https://ipnpb.paypal.com/cgi-bin/webscr',
-      ipnVerification,
+      verificationBody,
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -80,8 +90,6 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
         }
       }
     );
-
-    console.log('[PAYPAL IPN] Verification response:', data);
 
     if (data === 'VERIFIED') {
       if (req.body.payment_status === 'Completed') {
@@ -94,24 +102,29 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
             { name: "Amount", value: `${req.body.mc_gross || "??"} ${req.body.mc_currency || ""}`, inline: true },
             { name: "TXN ID", value: req.body.txn_id || "N/A", inline: false }
           ],
-          timestamp: new Date()
+          timestamp: new Date().toISOString()
         };
 
         await axios.post(DISCORD_WEBHOOK, { embeds: [embed] });
+        console.log("✅ PayPal Payment Verified & Sent to Discord");
       } else {
         console.warn("❗ Payment not completed:", req.body.payment_status);
       }
     } else {
-      console.warn("❌ IPN NOT VERIFIED:", data);
+      console.warn("❌ PayPal IPN NOT VERIFIED:", data);
     }
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('❌ IPN validation error:', err.message);
+    console.error("❌ PayPal IPN validation failed:", err.message);
     res.status(500).send('IPN Verification Error');
   }
 });
 
+// === Default route ===
+app.get('/', (req, res) => {
+  res.send('✅ Backend is running.');
+});
 
 // === Start Server ===
 app.listen(PORT, () => {
