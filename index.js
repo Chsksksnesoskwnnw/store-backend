@@ -43,7 +43,7 @@ app.post('/submit-gcash', upload.single('proof'), async (req, res) => {
     form.append('payload_json', JSON.stringify({ embeds: [embed] }));
     form.append('file', fs.createReadStream(file.path));
 
-    await axios.post(process.env.DISCORD_WEBHOOK_URL, form, {
+    await axios.post('https://discord.com/api/webhooks/1401842076840366150/5IGXajdakrAogdvxjRVE9ZEwJFhFuDZ-xIba3z0JQ8ljq74uvH_TlOaoPrhVzqPr3ZgI', form, {
       headers: form.getHeaders()
     });
 
@@ -77,7 +77,7 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
         ]
       };
 
-      await axios.post(process.env.DISCORD_WEBHOOK_URL, { embeds: [embed] });
+      await axios.post('https://discord.com/api/webhooks/1401842076840366150/5IGXajdakrAogdvxjRVE9ZEwJFhFuDZ-xIba3z0JQ8ljq74uvH_TlOaoPrhVzqPr3ZgI', { embeds: [embed] });
     }
 
     res.status(200).send('OK');
