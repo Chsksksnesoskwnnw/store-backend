@@ -1,3 +1,4 @@
+// Required modules
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
@@ -6,26 +7,34 @@ const fs = require('fs');
 const path = require('path');
 const FormData = require('form-data');
 const bodyParser = require('body-parser');
-require('dotenv').config();
+require('dotenv').config(); // Load from .env
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
-// === GCash Upload Configuration ===
+// === Multer Configuration for GCash Uploads ===
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'uploads/'),
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 const upload = multer({ storage });
 
-// === GCash Submission ===
+// === Discord Webhook from .env ===
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
+if (!DISCORD_WEBHOOK) {
+  console.warn("⚠️  DISCORD_WEBHOOK is not set in environment variables.");
+}
+
+// === GCash Submission Route ===
 app.post('/submit-gcash', upload.single('proof'), async (req, res) => {
   const { minecraft, discord, rank, method } = req.body;
   const file = req.file;
+
   const embed = {
     title: "📸 New GCash Proof Submitted",
     color: 0x0099ff,
@@ -43,9 +52,7 @@ app.post('/submit-gcash', upload.single('proof'), async (req, res) => {
     form.append('payload_json', JSON.stringify({ embeds: [embed] }));
     form.append('file', fs.createReadStream(file.path));
 
-    await axios.post('https://discord.com/api/webhooks/1401842076840366150/5IGXajdakrAogdvxjRVE9ZEwJFhFuDZ-xIba3z0JQ8ljq74uvH_TlOaoPrhVzqPr3ZgI', form, {
-      headers: form.getHeaders()
-    });
+    await axios.post(DISCORD_WEBHOOK_URL, form, { headers: form.getHeaders() });
 
     fs.unlinkSync(file.path);
     res.status(200).json({ success: true, message: "GCash submitted!" });
@@ -67,7 +74,7 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
 
     if (data === 'VERIFIED' && req.body.payment_status === 'Completed') {
       const embed = {
-        title: "PayPal Payment Verified",
+        title: "✅ PayPal Payment Verified",
         color: 0x00ff00,
         fields: [
           { name: "Minecraft", value: req.body.custom || "Unknown", inline: true },
@@ -77,7 +84,7 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
         ]
       };
 
-      await axios.post('https://discord.com/api/webhooks/1401842076840366150/5IGXajdakrAogdvxjRVE9ZEwJFhFuDZ-xIba3z0JQ8ljq74uvH_TlOaoPrhVzqPr3ZgI', { embeds: [embed] });
+      await axios.post(DISCORD_WEBHOOK_URL, { embeds: [embed] });
     }
 
     res.status(200).send('OK');
@@ -87,6 +94,7 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
   }
 });
 
+// === Start Server ===
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });

@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node index.js"
   },
+  "author": "Brion",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.6.7",
     "cors": "^2.8.5",
