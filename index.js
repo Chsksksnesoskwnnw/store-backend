@@ -70,31 +70,48 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
   const ipnVerification = `cmd=_notify-validate&${rawBody}`;
 
   try {
-    const { data } = await axios.post('https://ipnpb.paypal.com/cgi-bin/webscr', ipnVerification, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    const { data } = await axios.post(
+      'https://ipnpb.paypal.com/cgi-bin/webscr',
+      ipnVerification,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'User-Agent': 'Node.js IPN Verification'
+        }
+      }
+    );
 
-    if (data === 'VERIFIED' && req.body.payment_status === 'Completed') {
-      const embed = {
-        title: "✅ PayPal Payment Verified",
-        color: 0x00ff00,
-        fields: [
-          { name: "Minecraft", value: req.body.custom || "Unknown", inline: true },
-          { name: "Payer", value: req.body.payer_email, inline: true },
-          { name: "Amount", value: `${req.body.mc_gross} ${req.body.mc_currency}`, inline: true },
-          { name: "TXN ID", value: req.body.txn_id, inline: false }
-        ]
-      };
+    console.log('[PAYPAL IPN] Verification response:', data);
 
-      await axios.post(DISCORD_WEBHOOK, { embeds: [embed] });
+    if (data === 'VERIFIED') {
+      if (req.body.payment_status === 'Completed') {
+        const embed = {
+          title: "✅ PayPal Payment Verified",
+          color: 0x00ff00,
+          fields: [
+            { name: "Minecraft", value: req.body.custom || "Unknown", inline: true },
+            { name: "Payer", value: req.body.payer_email || "N/A", inline: true },
+            { name: "Amount", value: `${req.body.mc_gross || "??"} ${req.body.mc_currency || ""}`, inline: true },
+            { name: "TXN ID", value: req.body.txn_id || "N/A", inline: false }
+          ],
+          timestamp: new Date()
+        };
+
+        await axios.post(DISCORD_WEBHOOK, { embeds: [embed] });
+      } else {
+        console.warn("❗ Payment not completed:", req.body.payment_status);
+      }
+    } else {
+      console.warn("❌ IPN NOT VERIFIED:", data);
     }
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('IPN validation error:', err.message);
-    res.status(500).end();
+    console.error('❌ IPN validation error:', err.message);
+    res.status(500).send('IPN Verification Error');
   }
 });
+
 
 // === Start Server ===
 app.listen(PORT, () => {
