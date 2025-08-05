@@ -52,7 +52,9 @@ app.post('/submit-gcash', upload.single('proof'), async (req, res) => {
     form.append('payload_json', JSON.stringify({ embeds: [embed] }));
     form.append('file', fs.createReadStream(file.path));
 
-    await axios.post(DISCORD_WEBHOOK_URL, form, { headers: form.getHeaders() });
+    await axios.post(DISCORD_WEBHOOK, form, {
+      headers: form.getHeaders()
+    });
 
     fs.unlinkSync(file.path);
     res.status(200).json({ success: true, message: "GCash submitted!" });
@@ -84,7 +86,7 @@ app.post('/paypal-ipn', bodyParser.urlencoded({ extended: false }), async (req, 
         ]
       };
 
-      await axios.post(DISCORD_WEBHOOK_URL, { embeds: [embed] });
+      await axios.post(DISCORD_WEBHOOK, { embeds: [embed] });
     }
 
     res.status(200).send('OK');
